@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tool: Gefährdungsbeurteilung für Gefahrstoffe (Bereichsbezogen)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" xintegrity="sha512-BNaRQnYJYiPSqHHDb58B0yaPfCu+Wgds8Gp/gU33kqBtgNS4tSPHuGibyoV15hE5FdcSXfacMvel25ibFqnXDQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .header-sticky { position: sticky; top: 0; z-index: 50; }
+        h2 { border-bottom: 2px solid #3b82f6; padding-bottom: 0.5rem; margin-bottom: 1.5rem; font-size: 1.5rem; font-weight: 700; color: #1e3a8a; }
+        h3 { font-size: 1.5rem; font-weight: 700; color: #1e40af; margin-top: 2rem; margin-bottom: 1.5rem; }
+        h4 { font-size: 1.25rem; font-weight: 600; color: #1d4ed8; margin-bottom: 1rem;}
+        th { background-color: #f3f4f6; }
+        input, textarea, select { transition: all 0.2s ease-in-out; }
+        input:focus, textarea:focus, select:focus { --tw-ring-color: #3b82f6; border-color: #3b82f6; }
+        .btn { transition: all 0.2s ease-in-out; }
+        .remove-btn { background: none; border: none; color: #ef4444; cursor: pointer; font-size: 1.5rem; line-height: 1; }
+        .remove-btn:hover { color: #b91c1c; }
+        .room-block, .activity-block { border: 1px solid #d1d5db; border-radius: 0.5rem; padding: 1.5rem; margin-top: 2rem; position: relative; }
+        .activity-block { border-style: dashed; border-color: #9ca3af; padding-top: 1.5rem; margin-top: 1.5rem; border-width: 2px; }
+        .block-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        #roomSummaryTableBody tr, .activity-summary-tbody tr { cursor: pointer; }
+        #roomSummaryTableBody tr.active, .activity-summary-tbody tr.active { background-color: #dbeafe; }
+        .tab-btn { background-color: #e5e7eb; color: #374151; }
+        .tab-btn.active { background-color: #3b82f6; color: white; }
+        .hazard-dot { height: 12px; width: 12px; border-radius: 9999px; display: inline-block; }
+        textarea.autoresize { overflow-y: hidden; }
+        .risk-select {
+            padding: 0.25rem 0.5rem;
+            border-radius: 9999px; /* Pill-shape */
+            border: 1px solid #d1d5db;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-position: right 0.5rem center;
+            background-repeat: no-repeat;
+            background-size: 1.5em 1.5em;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+        }
+        .risk-low { background-color: #dcfce7 !important; color: #166534 !important; }
+        .risk-medium { background-color: #fef9c3 !important; color: #854d0e !important; }
+        .risk-high { background-color: #fee2e2 !important; color: #991b1b !important; }
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.5); z-index: 100;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .modal-content {
+            background-color: white; border-radius: 0.5rem; padding: 2rem;
+            width: 90%; max-width: 900px; max-height: 90vh; display: flex; flex-direction: column;
+        }
+        .modal-body {
+            overflow-y: auto;
+        }
+        .notification {
+            padding: 1rem 1.5rem; border-radius: 0.5rem; color: white;
+            font-weight: 500;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            opacity: 0;
+            transform: translateX(100%);
+            transition: all 0.5s ease-in-out;
+        }
+        .notification.show { opacity: 1; transform: translateX(0); }
+        .notification.success { background-color: #22c55e; } /* green-500 */
+        .notification.error { background-color: #ef4444; } /* red-500 */
+
+        /* Styles for the generated PDF report */
+        .pdf-page {
+            font-family: 'Inter', sans-serif;
+            page-break-after: always;
+            padding: 10mm 12mm; /* Margins */
+            box-sizing: border-box;
+            background-color: white;
+        }
+        .pdf-page:last-child {
+            page-break-after: auto;
+        }
+        .pdf-h1 { font-size: 1.5rem; font-weight: 700; color: #1e3a8a; margin-bottom: 1.5rem; }
+        .pdf-h2 {
+            border-bottom: 2px solid #3b82f6; padding-bottom: 0.25rem; margin-bottom: 1rem; font-size: 1.25rem; font-weight: 700; color: #1e3a8a;
+        }
+        .pdf-h3 {
+            font-size: 1.1rem; font-weight: 700; color: #1e40af; margin-top: 1.5rem; margin-bottom: 1rem; border-bottom: 1px solid #d1d5db; padding-bottom: 0.25rem;
+        }
+         .pdf-h4 {
+            font-size: 1rem; font-weight: 600; color: #1d4ed8; margin-top: 1rem; margin-bottom: 0.5rem;
+        }
+        .pdf-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 8pt;
+            margin-top: 0.5rem;
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+        .pdf-table th, .pdf-table td {
+            border: 1px solid #e5e7eb;
+            padding: 0.4rem;
+            text-align: left;
+            word-break: break-word;
+        }
+        .pdf-table th {
+            background-color: #f9fafb;
+        }
+        .pdf-activity-block {
+             page-break-inside: avoid;
+             margin-top: 1.5rem;
+             padding: 1rem;
+             border: 1px solid #e5e7eb;
+             border-radius: 0.5rem;
+        }
+        .pdf-grid-2 {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 1rem 1.5rem;
+            font-size: 9pt;
+        }
+        .pdf-grid-item .label {
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 0.25rem;
+            font-size: 8pt;
+        }
+        .pdf-grid-item .value {
+             word-wrap: break-word;
+             color: #1f2937;
+        }
+        .pdf-hazard-dot {
+            height: 10px; width: 10px; border-radius: 9999px; display: inline-block; vertical-align: middle;
+        }
+        .pdf-risk-badge {
+            display: inline-block;
+            padding: 0.125rem 0.75rem;
+            border-radius: 9999px;
+            font-weight: 500;
+            font-size: 8pt;
+        }
+        .pdf-risk-gering { background-color: #dcfce7; color: #166534; }
+        .pdf-risk-mittel { background-color: #fef9c3; color: #854d0e; }
+        .pdf-risk-hoch { background-color: #fee2e2; color: #991b1b; }
+
+    </style>
+</head>
+<body class="bg-gray-100">
+
+<div id="app-container" class="container mx-auto max-w-5xl bg-white p-6 sm:p-8 my-8 rounded-lg shadow-lg border border-gray-200">
+
+    <header class="header-sticky bg-white py-4 -mx-8 -mt-8 px-8 mb-6 border-b border-gray-200 rounded-t-lg no-print">
+        <div class="flex justify-between items-center flex-wrap gap-4">
+            <h1 class="text-2xl font-bold text-blue-900">Gefährdungsbeurteilung</h1>
+            <div class="flex items-center space-x-3 flex-wrap">
+                <button id="manageDbBtn" class="btn bg-gray-200 hover:bg-gray-300 text-black border border-gray-400 font-bold py-2 px-3 rounded-full text-xs">Stoffdatenbank verwalten</button>
+                 <div class="border-l border-gray-300 h-8"></div>
+                <button id="importBtn" class="btn bg-white hover:bg-gray-100 text-black border border-gray-400 font-bold py-2 px-4 rounded-full">Import</button>
+                <button id="exportBtn" class="btn bg-white hover:bg-gray-100 text-black border border-gray-400 font-bold py-2 px-4 rounded-full">Export</button>
+                <button id="printBtn" class="btn bg-white hover:bg-gray-100 text-black border border-gray-400 font-bold py-2 px-4 rounded-full">PDF Export</button>
+                 <input type="file" id="fileInput" accept=".json" class="hidden">
+                 <input type="file" id="dbFileInput" accept=".json" class="hidden">
+            </div>
+        </div>
+    </header>
+
+    <main id="gbForm" class="space-y-12">
+        <section id="allgemeine_angaben">
+            <h2>1. Allgemeine Angaben</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+                <div><label class="block text-sm font-medium text-gray-700">Betriebsbereich / Abteilung</label><input type="text" id="betriebsbereich" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" value="Diagnostiklabor"></div>
+                <div><label class="block text-sm font-medium text-gray-700">Datum der Erstellung</label><input type="date" id="datum_erstellung" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"></div>
+                <div><label class="block text-sm font-medium text-gray-700">Verantwortliche Person (GB-Leitung)</label><input type="text" id="verantwortlicher" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" value="Max Mustermann, SiFa"></div>
+                <div><label class="block text-sm font-medium text-gray-700">Beteiligte Personen</label><input type="text" id="beteiligte" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" value="Betriebsarztin Dr. Muster, Sicherheitsbeauftragter"></div>
+            </div>
+        </section>
+        
+        <hr/>
+        
+        <section id="room_management_section">
+            <h3 class="!mt-0 !border-t-0 !pt-0">Räume / Bereiche</h3>
+             <div class="overflow-x-auto no-print">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr>
+                            <th class="p-2 border text-left w-16">Nr.</th>
+                            <th class="p-2 border text-left">Raum / Bereich</th>
+                        </tr>
+                    </thead>
+                    <tbody id="roomSummaryTableBody"></tbody>
+                </table>
+            </div>
+             <button id="addRoomBtn" class="no-print mt-4 btn bg-white hover:bg-gray-100 text-black border border-gray-400 font-bold py-2 px-4 rounded-full text-sm">+ Raum / Bereich hinzufügen</button>
+        </section>
+        
+        <div id="roomsContainer">
+            <!-- Dynamic Room Blocks will be inserted here -->
+        </div>
+
+        <hr class="mt-12"/>
+        
+        <section id="dokumentation">
+            <h2>Letzter Abschnitt: Dokumentation & Fortschreibung</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+                <div><label for="doku_naechste" class="block text-sm font-medium text-gray-700">Datum nächste GB-Aktualisierung</label><input type="text" id="doku_naechste" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" value="Alle 2 Jahre oder bei Änderung"></div>
+                <div><label for="doku_unterschrift" class="block text-sm font-medium text-gray-700">Unterschrift Verantwortliche/r</label><input type="text" id="doku_unterschrift" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm"></div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="mt-8 pt-6 border-t border-gray-200 text-center text-xs text-gray-500">
+        <div class="mb-4 no-print">
+            <strong>Legende Gefahrensymbole:</strong>
+            <div class="flex justify-center items-center space-x-4 mt-1 text-xs">
+                <span class="flex items-center"><span class="hazard-dot bg-red-600 mr-1"></span>Brand/Explosion</span>
+                <span class="flex items-center"><span class="hazard-dot bg-sky-500 mr-1"></span>Akut toxisch</span>
+                <span class="flex items-center"><span class="hazard-dot bg-yellow-400 mr-1"></span>CMR-Stoff</span>
+                <span class="flex items-center"><span class="hazard-dot bg-rose-400 mr-1"></span>Mutterschutzrelevant</span>
+            </div>
+            <div class="flex justify-center items-center space-x-4 mt-2 text-xs">
+                <strong>TRGS 900 Bemerkungen:</strong>
+                <span>X=Krebserzeugend</span>
+                <span>Y=Kein Risiko bei AGW/BGW</span>
+                <span>Z=Risiko trotz AGW/BGW</span>
+                <span>H=Hautresorptiv</span>
+                <span>Sa/Sh/Sah=Sensibilisierend</span>
+                <span>AGS/DFG/EU=Herkunft des Grenzwertes</span>
+            </div>
+        </div>
+        <p><strong>Hinweis:</strong> Ergänzend sind Expositions- bzw. Vorsorgeverzeichnisse (KMR-Stoffe) nach § 14 GefStoffV separat zu führen.</p>
+        <p><strong>Anwenderhinweis:</strong> Alle Bewertungen und Entscheidungen sind fachkundig nach TRGS 400 zu dokumentieren. Bei KMR-Stoffen ist zusätzlich TRGS 910 zu berücksichtigen.</p>
+    </footer>
+
+    <datalist id="substance-list"></datalist>
+    
+    <!-- Database Management Modal -->
+    <div id="dbModal" class="modal-overlay hidden no-print">
+        <div class="modal-content">
+            <button id="closeDbModal" class="absolute top-4 right-4 text-2xl font-bold text-gray-500 hover:text-gray-800">&times;</button>
+            <h3 class="!mt-0">Stoffdatenbank verwalten</h3>
+            <div class="modal-body">
+                <table class="w-full text-sm">
+                    <thead><tr>
+                        <th class="p-2 border">Stoffname</th>
+                        <th class="p-2 border">CAS/EG-Nr.</th>
+                        <th class="p-2 border">H-Sätze</th>
+                        <th class="p-2 border">AGW</th>
+                        <th class="p-2 border">Bemerkung</th>
+                        <th class="p-2 border"></th>
+                    </tr></thead>
+                    <tbody id="dbTableBody"></tbody>
+                </table>
+            </div>
+            <div class="flex justify-between mt-4">
+                <button id="addDbRowBtn" class="btn bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-full text-sm">+ Neue Substanz</button>
+                <div>
+                     <button id="importDbBtnModal" class="btn bg-gray-200 hover:bg-gray-300 text-black border border-gray-400 py-2 px-4 rounded-full text-sm">Import</button>
+                     <button id="exportDbBtnModal" class="btn bg-gray-200 hover:bg-gray-300 text-black border border-gray-400 font-bold py-2 px-4 rounded-full text-sm">Export</button>
+                </div>
+                <button id="saveDbBtn" class="btn bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-full">Speichern & Schließen</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Container for PDF generation, kept off-screen -->
+<div id="print-content" class="absolute -left-[9999px] top-auto w-[210mm]"></div>
+
+<!-- Notification container -->
+<div id="notification-container" class="fixed bottom-5 right-5 z-[101] space-y-2 no-print"></div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let roomCounter = 0;
+    let activityCounter = 0;
+    let activeRoomId = null;
+
+    let substanceDatabase = {
+        'isopropanol': { cas: '67-63-0', h: 'H225, H319, H336', agw: '200 ppm', bemerkung: 'Y' },
+        'ethanol': { cas: '64-17-5', h: 'H225', agw: '200 ppm', bemerkung: 'Y, DFG' },
+        'aceton': { cas: '67-64-1', h: 'H225, H319, H336', agw: '500 ppm', bemerkung: 'Y, DFG, EU' },
+        'formaldehyd': { cas: '50-00-0', h: 'H301, H311, H314, H317, H331, H341, H350', agw: '0.3 ppm', bemerkung: 'Sh, Y, X' },
+        'salzsäure': { cas: '7647-01-0', h: 'H314, H335', agw: '2 ppm', bemerkung: 'Y, EU' },
+        'ammoniak': { cas: '7664-41-7', h: 'H221, H280, H314, H331, H400', agw: '20 ppm', bemerkung: 'Y, EU' },
+        'xylol': { cas: '1330-20-7', h: 'H226, H304, H312, H315, H319, H332, H335, H373', agw: '100 ppm', bemerkung: 'H, Y, EU' },
+        'methanol': { cas: '67-56-1', h: 'H225, H301, H311, H331, H370', agw: '100 ppm', bemerkung: 'H, Y, Z'},
+        'toluol': { cas: '108-88-3', h: 'H225, H304, H315, H336, H361d, H373', agw: '50 ppm', bemerkung: 'H, Y, EU' },
+        'natriumhydroxid': { cas: '1310-73-2', h: 'H290, H314', agw: '2 mg/m³ (E)', bemerkung: ''},
+        'schwefelsäure': { cas: '7664-93-9', h: 'H314', agw: '0.1 mg/m³ (E)', bemerkung: 'Y, EU'}
+    };
+
+    const hPhrases = {
+        H200: "Instabil, explosiv.", H201: "Explosiv, Gefahr der Massenexplosion.", H202: "Explosiv; große Gefahr durch Splitter, Spreng- und Wurfstücke.", H203: "Explosiv; Gefahr durch Feuer, Luftdruck oder Splitter, Spreng- und Wurfstücke.", H204: "Gefahr durch Feuer oder Splitter, Spreng- und Wurfstücke.", H205: "Gefahr der Massenexplosion bei Feuer.", H220: "Extrem entzündbares Gas.", H221: "Entzündbares Gas.", H222: "Extrem entzündbares Aerosol.", H223: "Entzündbares Aerosol.", H224: "Flüssigkeit und Dampf extrem entzündbar.", H225: "Flüssigkeit und Dampf leicht entzündbar.", H226: "Flüssigkeit und Dampf entzündbar.", H228: "Entzündbarer Feststoff.", H240: "Erwärmung kann Explosion verursachen.", H241: "Erwärmung kann Brand oder Explosion verursachen.", H242: "Erwärmung kann Brand verursachen.", H250: "Entzündet sich in Berührung mit Luft von selbst.", H251: "Selbsterhitzungsfähig; kann in Brand geraten.", H252: "In großen Mengen selbsterhitzungsfähig; kann in Brand geraten.", H260: "In Berührung mit Wasser entstehen entzündbare Gase, die sich von selbst entzünden können.", H261: "In Berührung mit Wasser entstehen entzündbare Gase.", H270: "Kann Brand verursachen oder verstärken; Oxidationsmittel.", H271: "Kann Brand oder Explosion verursachen; starkes Oxidationsmittel.", H272: "Kann Brand verstärken; Oxidationsmittel.", H280: "Enthält Gas unter Druck; kann bei Erwärmung explodieren.", H281: "Enthält tiefgekühltes Gas; kann Kälteverbrennungen oder -verletzungen verursachen.", H290: "Kann gegenüber Metallen korrosiv sein.",
+        H300: "Lebensgefahr bei Verschlucken.", H301: "Giftig bei Verschlucken.", H302: "Gesundheitsschädlich bei Verschlucken.", H304: "Kann bei Verschlucken und Eindringen in die Atemwege tödlich sein.", H310: "Lebensgefahr bei Hautkontakt.", H311: "Giftig bei Hautkontakt.", H312: "Gesundheitsschädlich bei Hautkontakt.", H314: "Verursacht schwere Verätzungen der Haut und schwere Augenschäden.", H315: "Verursacht Hautreizungen.", H317: "Kann allergische Hautreaktionen verursachen.", H318: "Verursacht schwere Augenschäden.", H319: "Verursacht schwere Augenreizung.", H330: "Lebensgefahr bei Einatmen.", H331: "Giftig bei Einatmen.", H332: "Gesundheitsschädlich bei Einatmen.", H334: "Kann bei Einatmen Allergie, asthmaartige Symptome oder Atembeschwerden verursachen.", H335: "Kann die Atemwege reizen.", H336: "Kann Schläfrigkeit und Benommenheit verursachen.", H340: "Kann genetische Defekte verursachen.", H341: "Kann vermutlich genetische Defekte verursachen.", H350: "Kann Krebs erzeugen.", H351: "Kann vermutlich Krebs erzeugen.", H360: "Kann die Fruchtbarkeit beeinträchtigen oder das Kind im Mutterleib schädigen.", H360FD: "Kann die Fruchtbarkeit beeinträchtigen. Kann das Kind im Mutterleib schädigen.", H361: "Kann vermutlich die Fruchtbarkeit beeinträchtigen oder das Kind im Mutterleib schädigen.", H362: "Kann Säuglinge über die Muttermilch schädigen.", H370: "Schädigt die Organe.", H371: "Kann die Organe schädigen.", H372: "Schädigt die Organe bei längerer oder wiederholter Exposition.", H373: "Kann die Organe schädigen bei längerer oder wiederholter Exposition.",
+        H400: "Sehr giftig für Wasserorganismen.", H410: "Sehr giftig für Wasserorganismen mit langfristiger Wirkung.", H411: "Giftig für Wasserorganismen, mit langfristiger Wirkung.", H412: "Schädlich für Wasserorganismen, mit langfristiger Wirkung.", H413: "Kann für Wasserorganismen schädlich sein, mit langfristiger Wirkung.", H420: "Schädigt die öffentliche Gesundheit und die Umwelt durch Ozonabbau in der äußeren Atmosphäre."
+    };
+    
+    const bemerkungPhrases = {
+        'X': "Krebserzeugender Stoff der Kat. 1A oder 1B", 'Y': "Kein Risiko der Fruchtschädigung bei Einhaltung von AGW und BGW", 'Z': "Risiko der Fruchtschädigung auch bei Einhaltung von AGW und BGW nicht ausgeschlossen", 'H': "Hautresorptiv", 'SA': "Atemwegssensibilisierend", 'SH': "Hautsensibilisierend", 'SAH': "Atemwegs- und hautsensibilisierend",
+        'DFG': "Senatskommission zur Prüfung gesundheitsschädlicher Arbeitsstoffe der DFG (MAK-Kommission)", 'AGS': "Ausschuss für Gefahrstoffe", 'EU': "Europäische Union (Von der EU wurde ein Luftgrenzwert festgelegt)"
+    };
+
+    const mutterschutzHSaetze = ['H360', 'H360FD', 'H361', 'H362', 'H340', 'H350', 'H370', 'H300', 'H301', 'H310', 'H311', 'H330', 'H331'];
+    
+    const staticFormIds = ['betriebsbereich', 'datum_erstellung', 'verantwortlicher', 'beteiligte', 'doku_naechste', 'doku_unterschrift'];
+    
+    const importBtn = document.getElementById('importBtn');
+    const fileInput = document.getElementById('fileInput');
+    const exportBtn = document.getElementById('exportBtn');
+    const printBtn = document.getElementById('printBtn');
+    const addRoomBtn = document.getElementById('addRoomBtn');
+    const roomsContainer = document.getElementById('roomsContainer');
+    const roomSummaryTableBody = document.getElementById('roomSummaryTableBody');
+    const manageDbBtn = document.getElementById('manageDbBtn');
+    const dbModal = document.getElementById('dbModal');
+    const closeDbModal = document.getElementById('closeDbModal');
+    const dbTableBody = document.getElementById('dbTableBody');
+    const addDbRowBtn = document.getElementById('addDbRowBtn');
+    const saveDbBtn = document.getElementById('saveDbBtn');
+    const importDbBtnModal = document.getElementById('importDbBtnModal');
+    const exportDbBtnModal = document.getElementById('exportDbBtnModal');
+    const dbFileInput = document.getElementById('dbFileInput');
+    
+    function showNotification(message, type = 'success') {
+        const container = document.getElementById('notification-container');
+        const notification = document.createElement('div');
+        notification.className = `notification ${type}`;
+        notification.textContent = message;
+        container.appendChild(notification);
+
+        setTimeout(() => { notification.classList.add('show'); }, 10);
+        setTimeout(() => {
+            notification.classList.remove('show');
+            setTimeout(() => { notification.remove(); }, 500);
+        }, 3000);
+    }
+
+    function initDatabase() {
+        try {
+            const storedDb = localStorage.getItem('gefahrstoffDB');
+            if (storedDb) { substanceDatabase = JSON.parse(storedDb); }
+        } catch(e) { console.error("Konnte lokale Stoffdatenbank nicht laden.", e); }
+        setupDatalist();
+    }
+    
+    function saveDatabase() {
+        try { localStorage.setItem('gefahrstoffDB', JSON.stringify(substanceDatabase)); } 
+        catch(e) { console.error("Konnte Stoffdatenbank nicht im lokalen Speicher sichern.", e); }
+    }
+
+    function setupDatalist() {
+        const datalist = document.getElementById('substance-list');
+        datalist.innerHTML = '';
+        Object.keys(substanceDatabase).sort().forEach(name => {
+            const option = document.createElement('option');
+            option.value = name.charAt(0).toUpperCase() + name.slice(1);
+            datalist.appendChild(option);
+        });
+    }
+
+    function setActiveRoom(roomId) {
+        activeRoomId = roomId;
+        document.querySelectorAll('.room-block').forEach(block => {
+            block.classList.toggle('hidden', block.id !== `room_block_${roomId}`);
+        });
+        updateRoomSummary();
+    }
+
+    function setActiveActivity(roomBlock, activityId) {
+        roomBlock.activeActivityId = activityId;
+        roomBlock.querySelectorAll('.activity-block').forEach(block => {
+            block.classList.toggle('hidden', block.id !== `activity_block_${activityId}`);
+        });
+        updateActivitySummaryForRoom(roomBlock);
+    }
+    
+    function updateRoomSummary() {
+        roomSummaryTableBody.innerHTML = '';
+        const blocks = document.querySelectorAll('.room-block');
+        blocks.forEach((block, index) => {
+            const title = block.querySelector('[name="room_titel"]').value;
+            const roomId = block.id.split('_')[2];
+            const row = roomSummaryTableBody.insertRow();
+            row.dataset.roomId = roomId;
+            row.className = 'transition-colors';
+            if(roomId === activeRoomId) { row.classList.add('active'); }
+            row.innerHTML = `<td class="p-2 border">${index + 1}</td><td class="p-2 border">${title}</td>`;
+        });
+    }
+
+     function updateActivitySummaryForRoom(roomBlock) {
+        const summaryTbody = roomBlock.querySelector('.activity-summary-tbody');
+        if (!summaryTbody) return;
+        summaryTbody.innerHTML = '';
+        const activityBlocks = roomBlock.querySelectorAll('.activity-block');
+        activityBlocks.forEach((block, index) => {
+            const title = block.querySelector('[name="taetigkeit_titel"]').value;
+            const activityId = block.id.split('_')[2];
+            const riskLevel = block.dataset.risk || 'Gering';
+
+            const row = summaryTbody.insertRow();
+            row.dataset.activityId = activityId;
+            let riskColorClass = '';
+            if (riskLevel === 'Gering') riskColorClass = 'bg-green-100';
+            if (riskLevel === 'Mittel') riskColorClass = 'bg-yellow-100';
+            if (riskLevel === 'Hoch') riskColorClass = 'bg-red-100';
+
+            row.className = 'transition-colors ' + riskColorClass;
+            if (activityId === roomBlock.activeActivityId) { row.classList.add('active'); }
+            
+            row.innerHTML = `<td class="p-2 border">${index + 1}</td>
+                             <td class="p-2 border">${title}</td>
+                             <td class="p-2 border">
+                                 <select name="risiko_level_summary" data-activity-id="${activityId}" class="w-full border-none focus:ring-0 bg-transparent risk-select ${riskColorClass}">
+                                     <option>Gering</option><option>Mittel</option><option>Hoch</option>
+                                 </select>
+                             </td>`;
+            const select = row.querySelector('select');
+            select.value = riskLevel;
+        });
+    }
+    
+    function updateHazardSummary(activityBlock) {
+        const summaryContainer = activityBlock.querySelector('.hazard-summary-container');
+        if (!summaryContainer) return;
+        const stoffRows = activityBlock.querySelectorAll('.stoff_tbody tr');
+        const allHSaetze = new Set();
+        const allBemerkungen = new Set();
+
+        stoffRows.forEach(row => {
+            const hInput = row.querySelector('[name="stoff_h"]');
+            if (hInput.value) { hInput.value.split(/[\s,]+/).filter(p => p.trim().toUpperCase().startsWith('H')).forEach(p => allHSaetze.add(p.trim().toUpperCase())); }
+            const bemInput = row.querySelector('[name="stoff_bemerkung"]');
+            if (bemInput.value) { bemInput.value.split(/[\s,]+/).filter(b => b.trim()).forEach(b => allBemerkungen.add(b.toUpperCase())); }
+        });
+
+        let listHtml = '';
+        if (allHSaetze.size > 0) {
+            const sortedHSaetze = Array.from(allHSaetze).sort();
+            listHtml += '<div class="p-3 bg-gray-50 rounded-md mt-4"><p class="font-bold mb-2">Zusammenfassung der Gefahrenhinweise:</p><ul class="list-disc list-inside space-y-1">';
+            sortedHSaetze.forEach(hSatz => { listHtml += `<li><strong>${hSatz}:</strong> ${hPhrases[hSatz] || 'Unbekannter H-Satz'}</li>`; });
+            listHtml += '</ul></div>';
+        }
+        if(allBemerkungen.size > 0) {
+             const sortedBemerkungen = Array.from(allBemerkungen).sort();
+              listHtml += '<div class="p-3 bg-gray-50 rounded-md mt-2"><p class="font-bold mb-2">Erläuterung der Bemerkungen:</p><ul class="list-disc list-inside space-y-1">';
+              sortedBemerkungen.forEach(bem => { listHtml += `<li><strong>${bem}:</strong> ${bemerkungPhrases[bem.toUpperCase().replace(/[^A-Z]/g, '')] || 'Unbekannte Bemerkung'}</li>`; });
+              listHtml += '</ul></div>';
+        }
+        summaryContainer.innerHTML = listHtml;
+    }
+
+    function updateExSchutzStoffeTable(roomBlock) {
+        const exTbody = roomBlock.querySelector('.exschutz-stoffe-tbody');
+        if(!exTbody) return;
+        exTbody.innerHTML = '';
+        const allExStoffe = new Map();
+
+        roomBlock.querySelectorAll('.activity-block').forEach(activityBlock => {
+            activityBlock.querySelectorAll('.stoff_tbody tr').forEach(row => {
+                const name = row.querySelector('[name="stoff_name"]').value;
+                const hInput = row.querySelector('[name="stoff_h"]');
+                const hPhrasesList = hInput.value ? hInput.value.toUpperCase().split(/[\s,]+/) : [];
+                const exPhrases = hPhrasesList.filter(p => p.startsWith('H2')).join(', ');
+                if(name && exPhrases) { allExStoffe.set(name, exPhrases); }
+            });
+        });
+
+        allExStoffe.forEach((h, name) => {
+            const row = exTbody.insertRow();
+            row.innerHTML = `<td class="p-2 border">${name}</td><td class="p-2 border">${h}</td>`;
+        });
+    }
+
+    function addRoomBlock(roomData = {}) {
+        roomCounter++;
+        const block = document.createElement('div');
+        block.className = 'room-block';
+        block.id = `room_block_${roomCounter}`;
+        const uniqueId = roomCounter;
+        block.innerHTML = `<div class="block-header"><input type="text" name="room_titel" class="text-2xl font-bold text-blue-900 border-none focus:ring-2 focus:ring-blue-300 rounded-md p-1 -ml-1 w-full" value="${roomData.titel || `Raum / Bereich ${uniqueId}`}"><button class="remove-btn no-print" title="Raum entfernen">&times;</button></div><div class="tab-nav no-print flex border-b border-gray-200 mt-6"><button data-tab="activities" class="tab-btn active px-4 py-2 text-sm font-medium rounded-t-md">Tätigkeiten</button><button data-tab="exschutz" class="tab-btn px-4 py-2 text-sm font-medium rounded-t-md">Explosionsschutz</button><button data-tab="notfall" class="tab-btn px-4 py-2 text-sm font-medium rounded-t-md">Brand- & Notfall</button><button data-tab="raumluft" class="tab-btn px-4 py-2 text-sm font-medium rounded-t-md">Raumlufttechnik</button></div><div class="tab-content mt-6"><div class="tab-pane" data-pane="activities"><div class="activity-management"><div class="overflow-x-auto no-print"><table class="w-full text-sm"><thead><tr><th class="p-2 border text-left w-16">Nr.</th><th class="p-2 border text-left">Tätigkeit</th><th class="p-2 border text-left w-40">Risiko</th></tr></thead><tbody class="activity-summary-tbody"></tbody></table></div><button class="add-activity-btn no-print mt-4 btn bg-blue-100 hover:bg-blue-200 text-blue-800 border-2 border-dashed border-blue-300 font-bold py-2 px-4 rounded-full text-sm">+ Tätigkeit für diesen Raum hinzufügen</button></div><div class="activities-container-per-room mt-8"></div></div><div class="tab-pane hidden" data-pane="exschutz"><h4 class="text-lg font-semibold text-gray-800 mb-2">Explosionsschutz</h4><div class="p-4 bg-gray-50 rounded-md space-y-4"><div class="flex items-center"><input type="checkbox" name="exschutz_erforderlich" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" ${roomData.exschutz_erforderlich ? 'checked' : ''}><label class="ml-2 block text-sm font-medium text-gray-700">Explosionsschutzdokument gemäß § 6 BetrSichV erforderlich</label></div><p class="text-sm font-medium text-gray-700 mt-4">Angaben zur Bildung explosionsfähiger Atmosphäre:</p><div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4"><div><label class="block text-xs font-medium text-gray-600">Prozessbedingte Staubbildung möglich</label><input type="text" name="exschutz_staubbildung" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm" value="${roomData.exschutz_staubbildung || ''}" placeholder="Ja/Nein, Art des Staubes..."></div><div><label class="block text-xs font-medium text-gray-600">Relevante Korngrößen / Verteilung</label><input type="text" name="exschutz_korngroesse" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm" value="${roomData.exschutz_korngroesse || ''}" placeholder="z.B. < 500 µm"></div><div><label class="block text-xs font-medium text-gray-600">Gefahrbringende Prozesse</label><input type="text" name="exschutz_prozesse" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm" value="${roomData.exschutz_prozesse || ''}" placeholder="z.B. Mahlen, Sprühen, Fördern"></div><div><label class="block text-xs font-medium text-gray-600">Hybride Gemische möglich</label><input type="text" name="exschutz_hybrid" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm text-sm" value="${roomData.exschutz_hybrid || ''}" placeholder="Ja/Nein (z.B. Staub + Lösemitteldampf)"></div></div><div class="mt-4"><h5 class="text-sm font-medium text-gray-700 mb-2">Explosionsrelevante Stoffe in diesem Raum:</h5><table class="w-full text-sm"><thead><tr><th class="p-2 border">Stoff/Gemisch</th><th class="p-2 border">H-Sätze (Brand/Ex)</th></tr></thead><tbody class="exschutz-stoffe-tbody"></tbody></table></div><div><label class="block text-sm font-medium text-gray-700 mt-4">Ex-Zoneneinteilung und Maßnahmen</label><textarea name="exschutz_zonen" rows="4" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm" placeholder="Beschreibung der Zonen (z.B. Zone 1 im Abzug, Zone 2 im Umkreis von 1m) und der getroffenen Maßnahmen (z.B. Zündquellenbewertung, Erdung, Einsatz Ex-geschützter Geräte).">${roomData.exschutz_zonen || ''}</textarea></div></div></div><div class="tab-pane hidden" data-pane="notfall"><h4 class="text-lg font-semibold text-gray-800 mb-2">Brand- und Notfallmaßnahmen</h4><div class="p-4 bg-gray-50 rounded-md space-y-4"><div class="grid grid-cols-1 md:grid-cols-2 gap-6"><div><p class="text-sm font-medium text-gray-700 mb-2">Feuerlöscher</p><div class="space-y-3"><div class="flex items-center"><input type="checkbox" name="notfall_co2_2kg" class="h-4 w-4 rounded" ${roomData.notfall_co2_2kg ? 'checked' : ''}><label class="ml-2 text-sm">CO2-Löscher (2kg)</label><input type="text" name="notfall_co2_2kg_loc" class="ml-2 flex-grow rounded-md border-gray-300 shadow-sm text-sm" value="${roomData.notfall_co2_2kg_loc || ''}" placeholder="Standort..."></div><div class="flex items-center"><input type="checkbox" name="notfall_co2_5kg" class="h-4 w-4 rounded" ${roomData.notfall_co2_5kg ? 'checked' : ''}><label class="ml-2 text-sm">CO2-Löscher (5kg)</label><input type="text" name="notfall_co2_5kg_loc" class="ml-2 flex-grow rounded-md border-gray-300 shadow-sm text-sm" value="${roomData.notfall_co2_5kg_loc || ''}" placeholder="Standort..."></div><div class="flex items-center"><input type="checkbox" name="notfall_schaum" class="h-4 w-4 rounded" ${roomData.notfall_schaum ? 'checked' : ''}><label class="ml-2 text-sm">Schaumlöscher</label><input type="text" name="notfall_schaum_loc" class="ml-2 flex-grow rounded-md border-gray-300 shadow-sm text-sm" value="${roomData.notfall_schaum_loc || ''}" placeholder="Standort..."></div><div class="flex items-center"><input type="checkbox" name="notfall_pulver" class="h-4 w-4 rounded" ${roomData.notfall_pulver ? 'checked' : ''}><label class="ml-2 text-sm">Pulverlöscher</label><input type="text" name="notfall_pulver_loc" class="ml-2 flex-grow rounded-md border-gray-300 shadow-sm text-sm" value="${roomData.notfall_pulver_loc || ''}" placeholder="Standort..."></div></div></div><div><p class="text-sm font-medium text-gray-700 mb-2">Erste-Hilfe-Einrichtungen</p><div class="space-y-3"><div class="flex items-center"><input type="checkbox" name="notfall_notdusche" class="h-4 w-4 rounded" ${roomData.notfall_notdusche ? 'checked' : ''}><label class="ml-2 text-sm">Notdusche</label><input type="text" name="notfall_notdusche_loc" class="ml-2 flex-grow rounded-md border-gray-300 shadow-sm text-sm" value="${roomData.notfall_notdusche_loc || ''}" placeholder="Standort..."></div><div class="flex items-center"><input type="checkbox" name="notfall_augenspuelung" class="h-4 w-4 rounded" ${roomData.notfall_augenspuelung ? 'checked' : ''}><label class="ml-2 text-sm">Augenspüleinrichtung</label><input type="text" name="notfall_augenspuelung_loc" class="ml-2 flex-grow rounded-md border-gray-300 shadow-sm text-sm" value="${roomData.notfall_augenspuelung_loc || ''}" placeholder="Standort..."></div><div class="flex items-center"><input type="checkbox" name="notfall_erstehilfe" class="h-4 w-4 rounded" ${roomData.notfall_erstehilfe ? 'checked' : ''}><label class="ml-2 text-sm">Erste-Hilfe-Material</label><input type="text" name="notfall_erstehilfe_loc" class="ml-2 flex-grow rounded-md border-gray-300 shadow-sm text-sm" value="${roomData.notfall_erstehilfe_loc || ''}" placeholder="Standort..."></div></div></div></div></div></div><div class="tab-pane hidden" data-pane="raumluft"><h4 class="text-lg font-semibold text-gray-800 mb-2">Raumlufttechnische Überwachung</h4><div class="p-4 bg-gray-50 rounded-md space-y-4"><div class="flex items-center space-x-6"><div><label class="block text-sm font-medium text-gray-700">Technischer Luftwechsel</label><select name="raumluft_lueftung" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"><option>Keiner</option><option>3-fach</option><option>5-fach</option><option>8-fach</option><option>10-fach</option><option>20-fach</option><option>25-fach</option></select></div><div class="pt-6"><div class="flex items-center"><input name="raumluft_gaswarn" type="checkbox" class="h-4 w-4 rounded" ${roomData.raumluft_gaswarn ? 'checked' : ''}><label class="ml-2 text-sm">Gaswarnanlage vorhanden</label></div></div></div><div><label class="block text-sm font-medium text-gray-700">Kommentar</label><textarea name="raumluft_kommentar" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">${roomData.raumluft_kommentar || ''}</textarea></div></div></div></div>`;
+        roomsContainer.appendChild(block);
+        block.querySelector('[name="raumluft_lueftung"]').value = roomData.raumluft_lueftung || 'Keiner';
+        const activitiesContainerPerRoom = block.querySelector('.activities-container-per-room');
+        if (roomData.activities && Array.isArray(roomData.activities)) {
+            roomData.activities.forEach(activityData => addActivityBlock(activitiesContainerPerRoom, activityData));
+        }
+        if(activitiesContainerPerRoom.children.length > 0) {
+            setActiveActivity(block, activitiesContainerPerRoom.children[0].id.split('_')[2]);
+        }
+        updateRoomSummary();
+        updateExSchutzStoffeTable(block);
+    }
+    
+    function addActivityBlock(container, activityData = {}) {
+        activityCounter++;
+        const block = document.createElement('div');
+        block.className = 'activity-block';
+        block.id = `activity_block_${activityCounter}`;
+        block.innerHTML = `<div class="block-header"><input type="text" name="taetigkeit_titel" class="text-xl font-bold text-gray-800 border-none focus:ring-2 focus:ring-blue-300 rounded-md p-1 -ml-1 w-full" value="${activityData.titel || `Neue Tätigkeit ${activityCounter}`}"><button class="remove-btn no-print" title="Tätigkeit entfernen">&times;</button></div><div><label class="block text-sm font-medium text-gray-700 mt-4">Beschreibung der Tätigkeit</label><textarea name="taetigkeit_beschreibung" rows="3" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm">${activityData.beschreibung || ''}</textarea></div><section><h3 class="!border-t-0 !pt-0 text-lg mt-6">Informationsermittlung</h3><div class="overflow-x-auto"><table class="w-full text-sm mt-4"><thead><tr><th class="p-2 border w-24">Gefahren</th><th class="p-2 border">Stoff/Gemisch</th><th class="p-2 border">Menge</th><th class="p-2 border">CAS/EG-Nr.</th><th class="p-2 border">H-Sätze</th><th class="p-2 border">AGW</th><th class="p-2 border">Bem. (TRGS 900)</th><th class="p-2 border no-print"></th></tr></thead><tbody class="stoff_tbody"></tbody></table></div><button class="add-stoff-btn no-print mt-4 btn bg-gray-200 hover:bg-gray-300 text-black border border-gray-400 font-bold py-1 px-3 rounded-full text-xs">+ Gefahrstoff hinzufügen</button><div class="hazard-summary-container mt-4 text-sm text-gray-700"></div><div class="save-stoff-container mt-2"></div></section><section><h3 class="text-lg mt-6">Wirksamkeitskontrolle</h3><div class="overflow-x-auto"><table class="w-full text-sm mt-4"><thead><tr><th class="p-2 border">Überprüfungsmethode</th><th class="p-2 border">Datum</th><th class="p-2 border">Ergebnis</th><th class="p-2 border no-print"></th></tr></thead><tbody class="kontrolle_tbody"></tbody></table></div><button class="add-kontrolle-btn no-print mt-4 btn bg-gray-200 hover:bg-gray-300 text-black border border-gray-400 font-bold py-1 px-3 rounded-full text-xs">+ Kontrolle hinzufügen</button></section>`;
+        container.appendChild(block);
+        block.dataset.risk = activityData.risiko || 'Gering';
+        const stoffTbody = block.querySelector('.stoff_tbody');
+        if (activityData.stoffe && Array.isArray(activityData.stoffe)) {
+            activityData.stoffe.forEach(stoffData => addStoffRow(stoffTbody, stoffData));
+        }
+        const kontrolleTbody = block.querySelector('.kontrolle_tbody');
+        if (activityData.kontrollen && Array.isArray(activityData.kontrollen)) {
+            activityData.kontrollen.forEach(kontrolleData => addKontrolleRow(kontrolleTbody, kontrolleData));
+        }
+        updateHazardSummary(block);
+    }
+
+
+    function addStoffRow(tbody, data = {}) {
+        const row = tbody.insertRow();
+        row.innerHTML = `<td class="p-1 border hazard-cell"></td><td class="p-1 border"><input type="text" name="stoff_name" class="w-full border-none focus:ring-0" value="${data.name || ''}" list="substance-list"></td><td class="p-1 border w-24"><input type="text" name="stoff_menge" class="w-full border-none focus:ring-0" value="${data.menge || ''}"></td><td class="p-1 border"><input type="text" name="stoff_cas" class="w-full border-none focus:ring-0" value="${data.cas || ''}"></td><td class="p-1 border"><textarea name="stoff_h" class="autoresize w-full border-none focus:ring-0 text-sm" rows="1">${data.h || ''}</textarea></td><td class="p-1 border"><input type="text" name="stoff_agw" class="w-full border-none focus:ring-0" value="${data.agw || ''}"></td><td class="p-1 border"><input type="text" name="stoff_bemerkung" class="w-full border-none focus:ring-0" value="${data.bemerkung || ''}"></td><td class="p-1 border text-center no-print"><button class="remove-btn" title="Gefahrstoff entfernen">&times;</button></td>`;
+        renderHazardIcons(row);
+        autosizeTextarea(row.querySelector('.autoresize'));
+    }
+
+    function getHazardIconsHtml(hSatzString, bemerkungString) {
+        let iconsHtml = '<div style="display: flex; align-items: center; gap: 4px; min-height: 12px;">';
+        let hasHazard = false;
+        const hPhrasesList = hSatzString ? hSatzString.toUpperCase().split(/[\s,]+/) : [];
+        const bemerkungen = bemerkungString ? bemerkungString.toUpperCase().split(/[\s,]+/) : [];
+
+        if (hPhrasesList.some(p => p.startsWith('H2'))) {
+            iconsHtml += `<span class="pdf-hazard-dot" style="background-color:#ef4444;" title="Brand- und Explosionsgefährdung"></span>`;
+            hasHazard = true;
+        }
+        if (hPhrasesList.some(p => ['H300', 'H301', 'H310', 'H311', 'H330', 'H331'].includes(p))) {
+            iconsHtml += `<span class="pdf-hazard-dot" style="background-color:#3b82f6;" title="Akute Toxizität (schwer)"></span>`;
+            hasHazard = true;
+        }
+        if (hPhrasesList.some(p => p.startsWith('H34') || p.startsWith('H35') || p.startsWith('H36'))) {
+            iconsHtml += `<span class="pdf-hazard-dot" style="background-color:#f59e0b;" title="CMR-Stoff"></span>`;
+            hasHazard = true;
+        }
+        if (mutterschutzHSaetze.some(p => hPhrasesList.includes(p.replace("FD", ""))) || bemerkungen.includes('X') || bemerkungen.includes('Z')) {
+            iconsHtml += `<span class="pdf-hazard-dot" style="background-color:#ec4899;" title="Mutterschutzrelevant"></span>`;
+            hasHazard = true;
+        }
+        iconsHtml += '</div>';
+        return hasHazard ? iconsHtml : '';
+    }
+
+    function renderHazardIcons(row) {
+        const hInput = row.querySelector('[name="stoff_h"]');
+        const bemerkungInput = row.querySelector('[name="stoff_bemerkung"]');
+        const hazardCell = row.querySelector('.hazard-cell');
+        hazardCell.innerHTML = getHazardIconsHtml(hInput.value, bemerkungInput.value).replace(/pdf-hazard-dot/g, 'hazard-dot');
+    }
+
+    function addKontrolleRow(tbody, data = {}) {
+        const row = tbody.insertRow();
+        row.innerHTML = `<td class="p-1 border"><input type="text" name="kontrolle_methode" class="w-full border-none focus:ring-0" value="${data.methode || ''}"></td><td class="p-1 border"><input type="date" name="kontrolle_datum" class="w-full border-none focus:ring-0" value="${data.datum || ''}"></td><td class="p-1 border"><input type="text" name="kontrolle_ergebnis" class="w-full border-none focus:ring-0" value="${data.ergebnis || ''}"></td><td class="p-1 border text-center no-print"><button class="remove-btn" title="Kontrolle entfernen">&times;</button></td>`;
+    }
+    
+    function collectFormData() {
+        const data = { rooms: [] };
+        staticFormIds.forEach(id => { const el = document.getElementById(id); data[id] = el.type === 'checkbox' ? el.checked : el.value; });
+        document.querySelectorAll('.room-block').forEach((roomBlock) => {
+            const room = {
+                titel: roomBlock.querySelector('[name="room_titel"]').value,
+                exschutz_erforderlich: roomBlock.querySelector('[name="exschutz_erforderlich"]').checked,
+                exschutz_staubbildung: roomBlock.querySelector('[name="exschutz_staubbildung"]').value,
+                exschutz_korngroesse: roomBlock.querySelector('[name="exschutz_korngroesse"]').value,
+                exschutz_prozesse: roomBlock.querySelector('[name="exschutz_prozesse"]').value,
+                exschutz_hybrid: roomBlock.querySelector('[name="exschutz_hybrid"]').value,
+                exschutz_zonen: roomBlock.querySelector('[name="exschutz_zonen"]').value,
+                notfall_co2_2kg: roomBlock.querySelector('[name="notfall_co2_2kg"]').checked,
+                notfall_co2_2kg_loc: roomBlock.querySelector('[name="notfall_co2_2kg_loc"]').value,
+                notfall_co2_5kg: roomBlock.querySelector('[name="notfall_co2_5kg"]').checked,
+                notfall_co2_5kg_loc: roomBlock.querySelector('[name="notfall_co2_5kg_loc"]').value,
+                notfall_schaum: roomBlock.querySelector('[name="notfall_schaum"]').checked,
+                notfall_schaum_loc: roomBlock.querySelector('[name="notfall_schaum_loc"]').value,
+                notfall_pulver: roomBlock.querySelector('[name="notfall_pulver"]').checked,
+                notfall_pulver_loc: roomBlock.querySelector('[name="notfall_pulver_loc"]').value,
+                notfall_notdusche: roomBlock.querySelector('[name="notfall_notdusche"]').checked,
+                notfall_notdusche_loc: roomBlock.querySelector('[name="notfall_notdusche_loc"]').value,
+                notfall_augenspuelung: roomBlock.querySelector('[name="notfall_augenspuelung"]').checked,
+                notfall_augenspuelung_loc: roomBlock.querySelector('[name="notfall_augenspuelung_loc"]').value,
+                notfall_erstehilfe: roomBlock.querySelector('[name="notfall_erstehilfe"]').checked,
+                notfall_erstehilfe_loc: roomBlock.querySelector('[name="notfall_erstehilfe_loc"]').value,
+                raumluft_lueftung: roomBlock.querySelector('[name="raumluft_lueftung"]').value,
+                raumluft_gaswarn: roomBlock.querySelector('[name="raumluft_gaswarn"]').checked,
+                raumluft_kommentar: roomBlock.querySelector('[name="raumluft_kommentar"]').value,
+                activities: []
+            };
+            roomBlock.querySelectorAll('.activity-block').forEach((activityBlock, index) => {
+                 const activity = {
+                    titel: activityBlock.querySelector('[name="taetigkeit_titel"]').value,
+                    beschreibung: activityBlock.querySelector('[name="taetigkeit_beschreibung"]').value,
+                    risiko: activityBlock.dataset.risk,
+                    stoffe: [],
+                    kontrollen: []
+                };
+                activityBlock.querySelectorAll('.stoff_tbody tr').forEach(row => {
+                    activity.stoffe.push({ name: row.querySelector('[name="stoff_name"]').value, cas: row.querySelector('[name="stoff_cas"]').value, h: row.querySelector('[name="stoff_h"]').value, menge: row.querySelector('[name="stoff_menge"]').value, agw: row.querySelector('[name="stoff_agw"]').value, bemerkung: row.querySelector('[name="stoff_bemerkung"]').value });
+                });
+                activityBlock.querySelectorAll('.kontrolle_tbody tr').forEach(row => {
+                    activity.kontrollen.push({ methode: row.querySelector('[name="kontrolle_methode"]').value, datum: row.querySelector('[name="kontrolle_datum"]').value, ergebnis: row.querySelector('[name="kontrolle_ergebnis"]').value });
+                });
+                room.activities.push(activity);
+            });
+            data.rooms.push(room);
+        });
+        return data;
+    }
+
+    function populateForm(data) {
+        staticFormIds.forEach(id => {
+            const el = document.getElementById(id);
+            if (data[id] !== undefined) { el.type === 'checkbox' ? el.checked = data[id] : el.value = data[id]; }
+        });
+        roomsContainer.innerHTML = '';
+        roomCounter = 0;
+        if (data.rooms && Array.isArray(data.rooms)) { data.rooms.forEach(addRoomBlock); }
+        if (roomsContainer.children.length > 0) { setActiveRoom(roomsContainer.children[0].id.split('_')[2]); }
+        updateRoomSummary();
+    }
+
+    function setRiskColor(selectElement) {
+        const parentCell = selectElement.parentElement;
+        parentCell.classList.remove('risk-low', 'risk-medium', 'risk-high');
+        switch(selectElement.value) {
+            case 'Gering': parentCell.classList.add('risk-low'); break;
+            case 'Mittel': parentCell.classList.add('risk-medium'); break;
+            case 'Hoch': parentCell.classList.add('risk-high'); break;
+        }
+    }
+
+    function autosizeTextarea(textarea) {
+        textarea.style.height = 'auto';
+        textarea.style.height = textarea.scrollHeight + 'px';
+    }
+    
+    function populateDbModalTable() {
+        dbTableBody.innerHTML = '';
+        Object.keys(substanceDatabase).sort().forEach(key => {
+            const data = substanceDatabase[key];
+            const row = dbTableBody.insertRow();
+            row.innerHTML = `<td class="p-1 border"><input type="text" class="db-name w-full border-gray-300 rounded" value="${key}"></td><td class="p-1 border"><input type="text" class="db-cas w-full border-gray-300 rounded" value="${data.cas || ''}"></td><td class="p-1 border"><input type="text" class="db-h w-full border-gray-300 rounded" value="${data.h || ''}"></td><td class="p-1 border"><input type="text" class="db-agw w-full border-gray-300 rounded" value="${data.agw || ''}"></td><td class="p-1 border"><input type="text" class="db-bemerkung w-full border-gray-300 rounded" value="${data.bemerkung || ''}"></td><td class="p-1 border text-center"><button class="remove-btn" title="Eintrag löschen">&times;</button></td>`;
+        });
+    }
+
+    function generateReportHtml(data) {
+        let html = `<div class="font-sans">`;
+
+        // Page 1: General Info & Room Overview
+        html += `<div class="pdf-page">
+                    <h1 class="pdf-h1">Gefährdungsbeurteilung nach § 6 GefStoffV</h1>
+                    <div class="pdf-grid-2 mt-8">
+                        <div class="pdf-grid-item"><div class="label">Betriebsbereich / Abteilung:</div><div class="value">${data.betriebsbereich || '-'}</div></div>
+                        <div class="pdf-grid-item"><div class="label">Datum der Erstellung:</div><div class="value">${data.datum_erstellung || '-'}</div></div>
+                        <div class="pdf-grid-item"><div class="label">Verantwortliche Person:</div><div class="value">${data.verantwortlicher || '-'}</div></div>
+                        <div class="pdf-grid-item"><div class="label">Beteiligte Personen:</div><div class="value">${data.beteiligte || '-'}</div></div>
+                    </div>
+                    <h3 class="pdf-h3 !mt-12">Übersicht der bewerteten Bereiche</h3>
+                    <table class="pdf-table">
+                        <thead><tr><th style="width: 10%;">Nr.</th><th>Raum / Bereich</th></tr></thead>
+                        <tbody>`;
+        if (data.rooms.length > 0) {
+            data.rooms.forEach((room, index) => {
+                html += `<tr><td>${index + 1}</td><td>${room.titel}</td></tr>`;
+            });
+        } else {
+            html += `<tr><td colspan="2">Keine Bereiche erfasst.</td></tr>`;
+        }
+        html += `       </tbody>
+                    </table>
+                 </div>`;
+
+        // Following Pages: Rooms and Activities
+        data.rooms.forEach(room => {
+            html += `<div class="pdf-page">
+                        <h2 class="pdf-h2">Raum / Bereich: ${room.titel}</h2>`;
+
+             // --- Activity & Risk Overview ---
+            html += `<h4 class="pdf-h4 !mt-4">Tätigkeitsübersicht & Risikobewertung</h4>
+                     <table class="pdf-table">
+                         <thead><tr><th>Tätigkeit</th><th style="width: 25%;">Risikoeinstufung</th></tr></thead>
+                         <tbody>`;
+            if (room.activities.length > 0) {
+                room.activities.forEach(activity => {
+                    const riskClass = `pdf-risk-${(activity.risiko || 'Gering').toLowerCase()}`;
+                    html += `<tr><td>${activity.titel}</td><td><span class="pdf-risk-badge ${riskClass}">${activity.risiko || '-'}</span></td></tr>`;
+                });
+            } else {
+                html += `<tr><td colspan="2">Keine Tätigkeiten für diesen Raum erfasst.</td></tr>`;
+            }
+            html += `       </tbody>
+                     </table>`;
+
+            
+            // --- Room specific info ---
+            html += `<h4 class="pdf-h4 !mt-8">Raumspezifische Informationen</h4>
+                     <div class="p-4 border border-gray-200 rounded-lg">
+                        <div class="pdf-grid-2">
+                           <div class="pdf-grid-item"><div class="label">Explosionsschutzdokument erforderlich:</div><div class="value">${room.exschutz_erforderlich ? 'Ja' : 'Nein'}</div></div>
+                           <div class="pdf-grid-item"><div class="label">Technischer Luftwechsel:</div><div class="value">${room.raumluft_lueftung || '-'}</div></div>
+                           <div class="pdf-grid-item"><div class="label">Gaswarnanlage vorhanden:</div><div class="value">${room.raumluft_gaswarn ? 'Ja' : 'Nein'}</div></div>
+                           <div class="pdf-grid-item"><div class="label">Kommentar zur Raumlufttechnik:</div><div class="value">${room.raumluft_kommentar || '-'}</div></div>
+                        </div>
+                        <h5 class="font-semibold mt-6 mb-2 text-sm">Brand- & Notfallausstattung</h5>
+                        <div class="pdf-grid-2">`;
+            const notfallItems = [
+                { 'CO2-Löscher (2kg)': room.notfall_co2_2kg_loc }, { 'CO2-Löscher (5kg)': room.notfall_co2_5kg_loc },
+                { 'Schaumlöscher': room.notfall_schaum_loc }, { 'Pulverlöscher': room.notfall_pulver_loc },
+                { 'Notdusche': room.notfall_notdusche_loc }, { 'Augenspüleinrichtung': room.notfall_augenspuelung_loc },
+                { 'Erste-Hilfe-Material': room.notfall_erstehilfe_loc }
+            ].filter(item => room[Object.keys(item)[0].toLowerCase().replace(/[^a-z0-9]/g, '')] || Object.values(item)[0]);
+
+            if (notfallItems.length > 0) {
+                 notfallItems.forEach(item => {
+                    const label = Object.keys(item)[0];
+                    const value = Object.values(item)[0] || 'Ja';
+                    html += `<div class="pdf-grid-item"><div class="label">${label}:</div><div class="value">${value}</div></div>`;
+                });
+            } else {
+                 html += `<div class="pdf-grid-item"><div class="value">Keine Ausstattung erfasst.</div></div>`;
+            }
+            html += `   </div>
+                     </div>`;
+            
+            // --- Detailed Activities ---
+            html += `<h3 class="pdf-h3 !mt-8">Detailansicht der Tätigkeiten</h3>`;
+            room.activities.forEach((activity, index) => {
+                 const riskClass = `pdf-risk-${(activity.risiko || 'Gering').toLowerCase()}`;
+                html += `<div class="pdf-activity-block">
+                            <h4 class="pdf-h4 !mt-0 !mb-4">Tätigkeit ${index + 1}: ${activity.titel}</h4>
+                            <div class="pdf-grid-2">
+                               <div class="pdf-grid-item"><div class="label">Beschreibung:</div><div class="value">${activity.beschreibung || '-'}</div></div>
+                               <div class="pdf-grid-item"><div class="label">Risikoeinstufung:</div><div class="value"><span class="pdf-risk-badge ${riskClass}">${activity.risiko || '-'}</span></div></div>
+                            </div>
+                            
+                            <h5 class="font-semibold text-gray-700 mt-4 mb-1 text-sm">Gefahrstoffe</h5>
+                            <table class="pdf-table">
+                                <thead><tr><th style="width: 5%;">Gef.</th><th>Stoff</th><th>Menge</th><th>CAS/EG</th><th>H-Sätze</th><th>AGW</th><th>Bem.</th></tr></thead>
+                                <tbody>`;
+                if (activity.stoffe.length > 0) {
+                    activity.stoffe.forEach(stoff => {
+                        html += `<tr>
+                                    <td>${getHazardIconsHtml(stoff.h, stoff.bemerkung)}</td>
+                                    <td>${stoff.name}</td><td>${stoff.menge}</td><td>${stoff.cas}</td><td>${stoff.h}</td><td>${stoff.agw}</td><td>${stoff.bemerkung}</td>
+                                 </tr>`;
+                    });
+                } else {
+                    html += `<tr><td colspan="7">Keine Gefahrstoffe für diese Tätigkeit erfasst.</td></tr>`;
+                }
+                html += `       </tbody>
+                            </table>
+
+                            <h5 class="font-semibold text-gray-700 mt-4 mb-1 text-sm">Wirksamkeitskontrolle</h5>
+                            <table class="pdf-table">
+                                <thead><tr><th>Methode</th><th>Datum</th><th>Ergebnis</th></tr></thead>
+                                <tbody>`;
+                if (activity.kontrollen.length > 0) {
+                    activity.kontrollen.forEach(k => {
+                        html += `<tr><td>${k.methode}</td><td>${k.datum}</td><td>${k.ergebnis}</td></tr>`;
+                    });
+                } else {
+                     html += `<tr><td colspan="3">Keine Kontrollen für diese Tätigkeit erfasst.</td></tr>`;
+                }
+                html += `       </tbody>
+                            </table>
+                         </div>`;
+            });
+            html += `</div>`; // end pdf-page for room
+        });
+        
+         html += `<div class="pdf-page">
+                    <h2 class="pdf-h2">Abschluss</h2>
+                     <div class="pdf-grid-2 mt-8">
+                        <div class="pdf-grid-item"><div class="label">Nächste Aktualisierung:</div><div class="value">${data.doku_naechste || '-'}</div></div>
+                        <div></div>
+                        <div class="pdf-grid-item mt-24"><div class="label">Datum, Unterschrift Verantwortliche/r:</div><div class="value border-t border-gray-400 mt-2 pt-1">${data.doku_unterschrift || '&nbsp;'}</div></div>
+                    </div>
+                  </div>`;
+
+        html += `</div>`; // end wrapper
+        return html;
+    }
+
+
+    async function generatePdf() {
+        showNotification('PDF wird generiert...', 'success');
+        const { jsPDF } = window.jspdf;
+        const data = collectFormData();
+        
+        const printContent = document.getElementById('print-content');
+        printContent.innerHTML = generateReportHtml(data);
+        
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        
+        const pages = printContent.querySelectorAll('.pdf-page');
+
+        try {
+            for (let i = 0; i < pages.length; i++) {
+                const page = pages[i];
+                if (i > 0) {
+                    pdf.addPage();
+                }
+                const canvas = await html2canvas(page, {
+                    scale: 3, // Increased scale for better sharpness
+                    logging: false,
+                    useCORS: true,
+                    width: page.scrollWidth
+                });
+                
+                const imgData = canvas.toDataURL('image/png', 1.0);
+                const imgWidth = canvas.width;
+                const imgHeight = canvas.height;
+                const ratio = imgWidth / imgHeight;
+
+                let pageImgWidth = pdfWidth;
+                let pageImgHeight = pageImgWidth / ratio;
+                
+                pdf.addImage(imgData, 'PNG', 0, 0, pageImgWidth, pageImgHeight, undefined, 'FAST');
+            }
+            
+            const fileName = (data.betriebsbereich || 'unbenannt').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            pdf.save(`gb_bericht_${fileName}.pdf`);
+            showNotification('PDF-Export erfolgreich!', 'success');
+
+        } catch (error) {
+            console.error("Fehler bei der PDF-Erstellung:", error);
+            showNotification('PDF konnte nicht erstellt werden.', 'error');
+        } finally {
+            printContent.innerHTML = ''; // Clean up
+        }
+    }
+
+
+    // --- EVENT LISTENERS ---
+    document.addEventListener('click', (event) => {
+        const target = event.target;
+        if (target.id === 'addRoomBtn') { addRoomBlock(); setActiveRoom(roomCounter); } 
+        const roomBlock = target.closest('.room-block');
+        if (roomBlock) {
+            if (target.classList.contains('add-activity-btn')) { const container = roomBlock.querySelector('.activities-container-per-room'); addActivityBlock(container); const newActivity = container.lastElementChild; setActiveActivity(roomBlock, newActivity.id.split('_')[2]); } 
+            else if (target.dataset.tab) { roomBlock.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active')); target.classList.add('active'); roomBlock.querySelectorAll('.tab-pane').forEach(pane => pane.classList.add('hidden')); roomBlock.querySelector(`.tab-pane[data-pane="${target.dataset.tab}"]`).classList.remove('hidden'); }
+        }
+        const activityBlock = target.closest('.activity-block');
+        if (activityBlock) {
+            if (target.classList.contains('add-stoff-btn')) { const tbody = activityBlock.querySelector('.stoff_tbody'); addStoffRow(tbody); } 
+            else if (target.classList.contains('add-kontrolle-btn')) { const tbody = activityBlock.querySelector('.kontrolle_tbody'); addKontrolleRow(tbody); }
+        }
+        if (target.classList.contains('remove-btn')) {
+            const blockToRemove = target.closest('.room-block, .activity-block, tr');
+            const isRoomBlock = blockToRemove.classList.contains('room-block');
+            blockToRemove.remove();
+            if(isRoomBlock) { const firstRoom = roomsContainer.querySelector('.room-block'); if(firstRoom) { setActiveRoom(firstRoom.id.split('_')[2]); } else { activeRoomId = null; } } 
+            else if (activityBlock) { const parentRoom = activityBlock.closest('.room-block'); updateActivitySummaryForRoom(parentRoom); const firstActivity = parentRoom.querySelector('.activity-block'); if(firstActivity) { setActiveActivity(parentRoom, firstActivity.id.split('_')[2]); } if(parentRoom) updateExSchutzStoffeTable(parentRoom); }
+            updateRoomSummary();
+            if (activityBlock) updateHazardSummary(activityBlock);
+        }
+    });
+
+    document.addEventListener('input', (event) => {
+        const target = event.target;
+        const activityBlock = target.closest('.activity-block');
+        const row = target.closest('tr');
+        const roomBlock = target.closest('.room-block');
+        if (target.getAttribute('name') === 'room_titel') { updateRoomSummary(); }
+        if(target.classList.contains('autoresize')) { autosizeTextarea(target); }
+        if (target.getAttribute('name') === 'risiko_level_summary') { const activityId = target.dataset.activityId; const activityDiv = roomBlock.querySelector(`#activity_block_${activityId}`); activityDiv.dataset.risk = target.value; setRiskColor(target); }
+        if (activityBlock) {
+             if (target.getAttribute('name') === 'taetigkeit_titel') { updateActivitySummaryForRoom(target.closest('.room-block')); }
+            if (target.getAttribute('name') === 'stoff_name') {
+                const substanceKey = target.value.toLowerCase(); const substanceData = substanceDatabase[substanceKey];
+                if (substanceData) { row.querySelector('[name="stoff_cas"]').value = substanceData.cas; row.querySelector('[name="stoff_h"]').value = substanceData.h; autosizeTextarea(row.querySelector('[name="stoff_h"]')); row.querySelector('[name="stoff_agw"]').value = substanceData.agw; row.querySelector('[name="stoff_bemerkung"]').value = substanceData.bemerkung; }
+            }
+            if(row && row.closest('tbody.stoff_tbody')) { renderHazardIcons(row); updateHazardSummary(activityBlock); if (roomBlock) updateExSchutzStoffeTable(roomBlock); }
+        }
+    });
+    
+    document.addEventListener('focusout', (event) => {
+        const target = event.target;
+        if (target.getAttribute('name') === 'stoff_name' && target.value) {
+            const row = target.closest('tr'); const activityBlock = target.closest('.activity-block'); const substanceKey = target.value.toLowerCase(); const saveContainer = activityBlock.querySelector('.save-stoff-container');
+            saveContainer.innerHTML = '';
+            if (!substanceDatabase[substanceKey]) {
+                const cas = row.querySelector('[name="stoff_cas"]').value; const h = row.querySelector('[name="stoff_h"]').value; const agw = row.querySelector('[name="stoff_agw"]').value;
+                if ((cas || h || agw)) { const saveBtn = document.createElement('button'); saveBtn.className = 'save-stoff-btn no-print mt-2 btn bg-green-100 hover:bg-green-200 text-green-800 border border-green-300 font-bold py-1 px-3 rounded-full text-xs'; saveBtn.textContent = `"${target.value}" in Datenbank speichern`; saveContainer.appendChild(saveBtn); }
+            }
+        }
+    });
+    
+    document.addEventListener('click', (event) => {
+        if(event.target.classList.contains('save-stoff-btn')) {
+            const row = event.target.closest('.activity-block').querySelector('.stoff_tbody tr:last-child'); const nameInput = row.querySelector('[name="stoff_name"]'); const name = nameInput.value; const substanceKey = name.toLowerCase();
+            substanceDatabase[substanceKey] = { cas: row.querySelector('[name="stoff_cas"]').value, h: row.querySelector('[name="stoff_h"]').value, agw: row.querySelector('[name="stoff_agw"]').value, bemerkung: row.querySelector('[name="stoff_bemerkung"]').value };
+            saveDatabase(); setupDatalist(); showNotification(`Stoff "${name}" wurde zur Datenbank hinzugefügt.`, 'success'); event.target.remove();
+        }
+    });
+
+    roomSummaryTableBody.addEventListener('click', (event) => { const row = event.target.closest('tr'); if (row && row.dataset.roomId) { setActiveRoom(row.dataset.roomId); } });
+    document.addEventListener('click', event => { const activitySummaryRow = event.target.closest('.activity-summary-tbody tr'); if (activitySummaryRow) { const roomBlock = activitySummaryRow.closest('.room-block'); setActiveActivity(roomBlock, activitySummaryRow.dataset.activityId); } });
+    
+    exportBtn.addEventListener('click', () => {
+        const data = collectFormData(); const jsonString = JSON.stringify(data, null, 2); const blob = new Blob([jsonString], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a');
+        const fileName = (document.getElementById('betriebsbereich').value || 'unbenannt').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        a.href = url; a.download = `gb_${fileName}.json`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    });
+    importBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (event) => {
+        const file = event.target.files[0]; if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try { populateForm(JSON.parse(e.target.result)); showNotification('Gefährdungsbeurteilung erfolgreich importiert!', 'success'); } 
+            catch (error) { showNotification('Fehler beim Importieren der Datei.', 'error'); console.error("Import Fehler:", error); }
+        };
+        reader.readAsText(file); fileInput.value = '';
+    });
+    
+    exportDbBtnModal.addEventListener('click', () => {
+        const jsonString = JSON.stringify(substanceDatabase, null, 2); const blob = new Blob([jsonString], { type: 'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a');
+        a.href = url; a.download = `gefahrstoff-datenbank.json`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    });
+    importDbBtnModal.addEventListener('click', () => dbFileInput.click());
+    dbFileInput.addEventListener('change', (event) => {
+        const file = event.target.files[0]; if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try { const importedDb = JSON.parse(e.target.result); substanceDatabase = importedDb; saveDatabase(); setupDatalist(); populateDbModalTable(); showNotification('Stoffdatenbank erfolgreich importiert!', 'success'); } 
+            catch (error) { showNotification('Fehler beim Importieren der Datenbank-Datei.', 'error'); console.error("DB Import Fehler:", error); }
+        };
+        reader.readAsText(file); dbFileInput.value = '';
+    });
+    
+    printBtn.addEventListener('click', () => { generatePdf(); });
+    manageDbBtn.addEventListener('click', () => { populateDbModalTable(); dbModal.classList.remove('hidden'); });
+    closeDbModal.addEventListener('click', () => dbModal.classList.add('hidden'));
+    addDbRowBtn.addEventListener('click', () => {
+        const row = dbTableBody.insertRow();
+        row.innerHTML = `<td class="p-1 border"><input type="text" class="db-name w-full border-gray-300 rounded"></td><td class="p-1 border"><input type="text" class="db-cas w-full border-gray-300 rounded"></td><td class="p-1 border"><input type="text" class="db-h w-full border-gray-300 rounded"></td><td class="p-1 border"><input type="text" class="db-agw w-full border-gray-300 rounded"></td><td class="p-1 border"><input type="text" class="db-bemerkung w-full border-gray-300 rounded"></td><td class="p-1 border text-center"><button class="remove-btn" title="Eintrag löschen">&times;</button></td>`;
+    });
+    saveDbBtn.addEventListener('click', () => {
+        const newDb = {};
+        dbTableBody.querySelectorAll('tr').forEach(row => {
+            const name = row.querySelector('.db-name').value.toLowerCase();
+            if (name) { newDb[name] = { cas: row.querySelector('.db-cas').value, h: row.querySelector('.db-h').value, agw: row.querySelector('.db-agw').value, bemerkung: row.querySelector('.db-bemerkung').value }; }
+        });
+        substanceDatabase = newDb; saveDatabase(); setupDatalist(); dbModal.classList.add('hidden');
+    });
+    dbTableBody.addEventListener('click', (event) => { if(event.target.classList.contains('remove-btn')) { event.target.closest('tr').remove(); } });
+
+    // --- INITIALIZATION ---
+    initDatabase();
+    if (!document.getElementById('datum_erstellung').value) { document.getElementById('datum_erstellung').valueAsDate = new Date(); }
+    addRoomBlock({
+        titel: "Laborraum 101", exschutz_erforderlich: true, exschutz_zonen: "Zone 2 im Abzugsbereich. Zündquellenbewertung durchgeführt.", notfall_co2_5kg: true, notfall_co2_5kg_loc: "An der Tür zum Laborflur", notfall_notdusche: true, notfall_notdusche_loc: "Kombinierte Körper-/Augendusche am Ausgang", notfall_augenspuelung: true, notfall_augenspuelung_loc: "Siehe Notdusche; zusätzlich Augenspülflasche", notfall_erstehilfe: true, notfall_erstehilfe_loc: "Verbandskasten nach DIN 13157, im Sozialraum", raumluft_lueftung: "10-fach",
+        activities: [{
+            titel: "Umfüllen von Lösemitteln", beschreibung: "Manuelles Umfüllen von Isopropanol aus Großgebinde in kleine Arbeitsflaschen.", risiko: "Mittel",
+            stoffe: [{ name: "Isopropanol", cas: "67-63-0", h: "H225, H319, H336", agw: "200 ppm", bemerkung: "Y", menge: "ca. 5L/Woche" }],
+            kontrollen: [{ methode: "Prüfung der Absaugung", datum: "2025-01-15", ergebnis: "Luftgeschwindigkeit > 0,5 m/s. I.O." }]
+        }]
+    });
+    if (roomsContainer.children.length > 0) { setActiveRoom(roomsContainer.children[0].id.split('_')[2]); }
+});
+</script>
+
+</body>
+</html>
